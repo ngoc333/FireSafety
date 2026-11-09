@@ -60,11 +60,10 @@ export async function loadBootstrap(employeeId:string):Promise<BootstrapData> {
 }
 
 export async function uploadEvent(event:OutboxEvent):Promise<void> {
-  if (target==='lan') {
-    await lanRequest<{success:boolean}>('/events',{method:'POST',body:JSON.stringify(event)});
-  } else {
-    await cloudRequest<{success:boolean}>('event',{event});
-  }
+  const result = target==='lan'
+    ? await lanRequest<{success:boolean}>('/events',{method:'POST',body:JSON.stringify(event)})
+    : await cloudRequest<{success:boolean}>('event',{event});
+  if (result.success !== true) throw new Error('Máy chủ chưa xác nhận đã lưu dữ liệu.');
 }
 
 async function probe(url:string):Promise<boolean> {
