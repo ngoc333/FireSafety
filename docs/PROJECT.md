@@ -38,7 +38,7 @@ Rewrite the Android app `DangerZoneScan` into an independent, mobile-first **Fir
 2. Run and verify the LAN inspection / repair / schedules / history flow, offline persistence, retries and security before proceeding.
 3. **Later (only on request):** Internet build on Vercel, authenticated Supabase backend, and a trusted C# worker exchanging data between internal PostgreSQL and Supabase.
 
-Use one frontend codebase with environment-specific builds; do not create separate React apps. Supabase/worker starter files already present on the PWA branch are *scaffolding*, not proof that cloud integrations are deployed or working. Leave them alone during LAN-first work unless a narrow change is needed.
+Use one frontend codebase with environment-specific builds; do not create separate React apps. Supabase/worker starter files already present in the development branches are *scaffolding*, not proof that cloud integrations are deployed or working. Leave them alone during LAN-first work unless a narrow change is needed.
 
 ## Source facts and integration boundary
 
@@ -51,14 +51,17 @@ Those names are **observed calls in the source**, not a verified specification o
 
 The initial PWA branch uses these *proposed* LAN routes: `POST /login`, `GET /health`, `GET /bootstrap`, `POST /events`. Treat these as frontend integration requirements to reconcile with the real server, **not endpoints already deployed**.
 
-## Branches and current implementation
+## Git branches and current implementation
 
-- `local` (**active, primary/default**): React + TypeScript mobile UI, IndexedDB (Dexie), auto-sync outbox, PWA. Build and stabilize the LAN API + internal PostgreSQL integration here.
-- `internet` (**later**): initially shares the same frontend foundation; use Supabase, Vercel and the C# bridge only after the LAN workflow is verified and the user requests Internet work.
-- **Workflow:** one developer, direct commits on `local` or `internet`. No permanent `main`, extra feature branches or PR flow is needed.
-- `src/`: React UI and client data/synchronization modules.
-- `supabase/`: future Internet-side schema/function scaffold.
-- `worker/`: future internal-to-cloud C# worker scaffold.
+- `main` (default, stable): agreed Agent Harness and documentation; do not interpret development code on other branches as tested or released on `main`.
+- `local` (active): initial React + TypeScript mobile-first PWA, IndexedDB/Dexie, automatic-sync outbox and LAN API integration in progress.
+- `internet` (deferred): shares the starting frontend; Supabase, Vercel and C# Worker work comes **after** the LAN version is accepted.
+- One developer: commit directly to `local` or `internet`, merge **verified and accepted** work into `main`; no new branches or PRs by default.
+- The old `feat/offline-first-pwa` branch is legacy and not used for new work; its existence does not change the 3-branch policy.
+- `src/`: React UI and client storage/synchronization modules on development branches.
+- `supabase/` and `worker/`: future cloud scaffolding, not production integrations.
+
+See [PLAN.md](PLAN.md) for verified status, open items, blockers and the next action.
 
 **Not yet proven working in the factory:** authenticated LAN API integration, production SQL changes for photo-free repairs, full cross-device sync semantics, mobile QR/browser compatibility, first-load provisioning, and real offline/reconnect behavior. Always report these limitations until actually verified.
 
