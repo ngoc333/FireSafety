@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { resolveApiTarget } from './api-target';
-import type { BootstrapData, OutboxEvent, Profile } from './types';
+import type { BootstrapData, MasterCursorMap, OutboxEvent, Profile } from './types';
 
 export const target = resolveApiTarget(window.location.hostname, import.meta.env.VITE_DEPLOY_TARGET);
 const lanUrl = (import.meta.env.VITE_LAN_API_BASE as string | undefined)?.replace(/\/$/,'') || '/api/fire-safety';
@@ -62,8 +62,12 @@ export async function signOut():Promise<void> {
   if (supabase) await supabase.auth.signOut();
 }
 
-export async function loadBootstrap(employeeId:string):Promise<BootstrapData> {
-  if (target==='lan') return lanRequest<BootstrapData>('/bootstrap?employeeId='+encodeURIComponent(employeeId));
+export async function loadBootstrap(employeeId:string, cursors?:MasterCursorMap):Promise<BootstrapData> {
+  if (target==='lan') {
+    const query = new URLSearchParams({employeeId});
+    for (const [type, value] of Object.entries(cursors ?? {})) if (value) query.set(type, String(value));
+    return lanRequest<BootstrapData>('/bootstrap?'+query.toString());
+  }
   return cloudRequest<BootstrapData>('bootstrap',{});
 }
 

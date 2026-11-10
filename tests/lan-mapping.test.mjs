@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rsmRows, mapBootstrap, dateKey } from '../server/rsm-mapping.mjs';
+import { rsmRows, rsmJson, mapBootstrap, mapRepairs, dateKey } from '../server/rsm-mapping.mjs';
 
 test('RSM returns arrays in supported envelope formats', () => {
   const rows = [{ PLANT_CD: '2210' }];
@@ -10,6 +10,22 @@ test('RSM returns arrays in supported envelope formats', () => {
   }
   assert.throws(() => rsmRows({ data: { other: 'bad' } }), /array/);
   assert.throws(() => rsmRows({ success: false, data: [] }), /rejected/);
+});
+
+test('RSM master JSON accepts the gateway function envelope', () => {
+  const master = { type: 'EQUIPMENT', syncAt: '2026-11-10T00:00:00Z', data: [{ equip_id: 'E1' }] };
+  assert.deepEqual(rsmJson({ success: true, data: [{ dz_web_get_master: master }] }, 'dz_web_get_master'), master);
+  assert.deepEqual(rsmJson({ success: true, data: { dz_web_get_master: master } }, 'dz_web_get_master'), master);
+  assert.deepEqual(rsmJson(master, 'dz_web_get_master'), master);
+});
+
+test('open repairs are normalized for the new bootstrap without master joins', () => {
+  const [repair] = mapRepairs([{ PLANT_CD: '2210', AREA_LOC: 'A', WS_LOC: 'W', SUB_WS_LOC: 'E1',
+    ITEM_GROUP_CD: 'G', ITEM_CD: 'I1', SCHEDULE_DATE: '20261110', CHECK_DATE: '20261110',
+    ITEM_NAME_VN: 'Mục kiểm tra', SUB_WS_NAME: 'Thiết bị', CHECK_CM_VN: 'Sửa chữa',
+    COMPLETE_DATE: '20261120', ACTION_STATUS: 'OPEN' }]);
+  assert.equal(repair.id, '2210|A|W|E1|G|I1|20261110|20261110');
+  assert.equal(repair.countermeasureName, 'Sửa chữa');
 });
 
 test('mapping handles actual Android RSM column names and repairs', () => {

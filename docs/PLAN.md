@@ -6,12 +6,13 @@
 
 - **Default/stable:** `main` (contains the agent harness; feature code is not promoted until tested).
 - **Active development branch:** `local` (LAN + internal PostgreSQL). **Internet:** deferred.
-- **Current focus:** validate the new read-only LAN adapter against real Oracle/RSM responses; then confirm atomic PostgreSQL idempotent write functions.
+- **Current focus:** apply and verify the reviewed RSM master migration, then validate `dz_web_get_master` through the real RSM Gateway; after that confirm atomic PostgreSQL idempotent write functions.
+- **Master sync status:** six PostgreSQL-shaped IndexedDB v2 stores, per-master cursors and ±7-day schedule replacement are implemented and mock-tested locally; the RSM migration/function are not yet applied.
 - **Last completed:** existing frontend foundation and hostname/IndexedDB isolation; implemented read-only LAN Node gateway and RSM row mapping on `local` (commits `d65a3ec8`, `81352f5e`, `07e44a64`). Mock Oracle/RSM integration test, mapping tests, `npm test` and React build **passed** (GitHub Actions `42743749875`). This does not prove a real LAN database connection.
-- **Known blockers:** PostgreSQL function definitions/permissions and live RSM/Oracle response envelopes not verified; LAN adapter is not yet deployed. No atomic event UUID deduplication or photo-free repair write function is confirmed, so `/events` deliberately returns HTTP 501 and IndexedDB keeps pending writes. Unscoped legacy `FireSafety` IndexedDB is not auto-migrated.
+- **Known blockers:** PostgreSQL migration/function definitions have not been applied; live RSM/Oracle response envelopes and permissions are not verified; LAN adapter is not deployed. No atomic event UUID deduplication or photo-free repair write function is confirmed, so `/events` deliberately returns HTTP 501. Unscoped legacy `FireSafety` IndexedDB is not auto-migrated.
 - **Not yet verified:** real LAN authentication/data access, full inspection/repair flow, physical phone QR, PWA offline/reconnect, event retry/idempotency, on-device multi-user cache isolation, or cloud synchronization.
-- **Next task (one):** run the LAN adapter with authorized access to the real Oracle/RSM Gateway, capture **redacted example responses and SQL function signatures** (especially save-inspection and photo-free repair), then design an atomic event UUID acknowledgment before enabling `/events`.
-- **Last documentation update:** 2026-11-10 (read-only LAN adapter, mocked verification and integration blockers).
+- **Next task (one):** have an authorized database operator review/apply `server/sql/001_dz_web_master_sync.sql`, then capture redacted `dz_web_get_master` responses and verify the six-master bootstrap against the real RSM Gateway.
+- **Last documentation update:** 2026-11-10 (six-master IndexedDB/API contract and reviewed-but-not-applied RSM migration).
 
 ## Roadmap & checklist
 
@@ -28,9 +29,12 @@ Legend: `[x]` means the stated artifact/action is **verified**; `[ ]` means stil
 
 - [ ] Verify the real read/write functions, returned columns, employee identity and server-side permissions; document only the actual contracts.
 - [ ] Agree the common API semantics: RSM gateway response wrappers vs Supabase RPC, identity scope, input/output mapping and unambiguous write acknowledgments.
+- [ ] Review/apply `server/sql/001_dz_web_master_sync.sql`: `dz_code.use_yn`, `value06 -> use_yn` on the other five master tables, `timestamptz` audit fields and update triggers.
+- [ ] Verify the single `rsm.dz_web_get_master` contract for `CHECKLIST_ITEM`, `CODE`, `COUNTERMEASURE_ITEM`, `EQUIPMENT`, `LOCATION` and schedule ±7-day window.
 - [x] Build the smallest LAN adapter **read-only foundation**: Oracle employee login, signed cookie, health, employee-scoped bootstrap, RSM read mapping, and mocked end-to-end test. No production verification yet.
 - [ ] Implement and verify the remaining durable, idempotent `/events` submission; currently responds HTTP 501.
 - [x] Implement/test mapping for locations, checklist items, countermeasures, schedules and open repairs against sample RSM-shaped rows.
+- [x] Implement/test the PostgreSQL-shaped six-master response envelope and LAN bootstrap cursor parameters with mocks; no live DB verification yet.
 - [ ] Verify mapping against real RSM output; implement server-side inspection history/results in React API contract.
 - [ ] Support `NO OK` with countermeasure/due date and photo-free repair completion; adjust database contract **without inventing** existing functions.
 - [ ] Add idempotent event handling (unique event UUID), explicit acknowledgments and actionable failure messages.
@@ -40,6 +44,7 @@ Legend: `[x]` means the stated artifact/action is **verified**; `[ ]` means stil
 - [x] Initial React + TypeScript mobile-first PWA UI and QR/manual-input interface **scaffold exists**.
 - [x] Initial IndexedDB/Dexie, local save and automatic outbox sync **scaffold exists**.
 - [x] Hostname-based backend selection, localhost `.env.local` override, separate IndexedDB by environment and employee **implemented**. Native Node routing tests and frontend build passed on `local`; not yet verified against running servers.
+- [x] Replace legacy master stores with IndexedDB v2 stores for checklist items, codes, countermeasures, equipment, locations and schedules; preserve inspections, completions and outbox. Delta cursors and atomic schedule replacement are implemented; real browser migration is not yet verified.
 - [ ] Verify login/offline reopening and strict separation of employee data on the same device.
 - [ ] Verify full inspection, schedule (existing ±7-day rule), history and repair journeys without any reporting/before/after photos.
 - [ ] Verify first online provisioning, PWA install, HTTPS and QR camera on real phones (manual QR entry remains available).

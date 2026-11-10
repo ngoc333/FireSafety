@@ -54,7 +54,7 @@ npm run dev:api
 npm run dev
 ```
 
-Vite proxies API calls to the Node adapter. Use a single internal HTTPS origin for production, configure the trusted proxy, TLS and session secret. All secrets live in server environment variables. `GET /bootstrap` maps 5 existing RSM read functions into the shared React data model; the actual network responses still require validation. `POST /events` deliberately returns **501** until the real PostgreSQL functions support atomic event-UUID deduplication. This ensures pending offline writes are never falsely acknowledged. The history import is also not completed. See server source and `docs/PLAN.md`.
+Vite proxies API calls to the Node adapter. Use a single internal HTTPS origin for production, configure the trusted proxy, TLS and session secret. All secrets live in server environment variables. `GET /bootstrap` calls the single PostgreSQL master function `rsm.dz_web_get_master` for checklist items, codes, countermeasures, equipment, locations and the server-controlled schedule window. Master cursors use `update_date`; schedules are replaced as one ±7-day cache. Open repairs still use the existing read function. The PostgreSQL migration is in `server/sql/001_dz_web_master_sync.sql` and must be reviewed/run by an authorized database operator. `POST /events` deliberately returns **501** until the real PostgreSQL functions support atomic event-UUID deduplication. This ensures pending offline writes are never falsely acknowledged. The history import is also not completed. See server source and `docs/PLAN.md`.
 
 ## LAN gateway contract
 
@@ -62,7 +62,7 @@ The LAN API must enforce authenticated user authorization and CORS origin policy
 
 - `POST /login` body `{employeeId}`, returns `{profile,accessToken?}`. LAN deployment must be restricted to trusted access or use stronger user authentication if exposed beyond LAN.
 - `GET /health` returns HTTP 200 (CORS enabled, allow preflight when applicable).
-- `GET /bootstrap?employeeId=...` returns `BootstrapData` in `src/types.ts`. The server derives/validates the authorized employee identity; ignore spoofed employeeId.
+- `GET /bootstrap?employeeId=...` returns `BootstrapData` in `src/types.ts`; optional master cursor query parameters are `checklist_item`, `code`, `countermeasure_item`, `equipment` and `location`. The server derives/validates the authorized employee identity; ignore spoofed employeeId.
 - `POST /events` receives an `OutboxEvent`, returns `{success:true}` only **after** a durable, idempotent database commit keyed by event UUID.
 
 The existing Android app uses PostgreSQL functions `fn_dz_scan_get_master_checklists`, `fn_dz_scan_get_locations`, `fn_dz_scan_get_master_countermeasures`, `fn_dz_scan_get_schedule`, `fn_dz_scan_get_results`, `fn_dz_scan_get_open_repairs`, `fn_dz_scan_save_inspection` and image-based repair functions. The LAN gateway must adapt these functions; this repository does not claim those server endpoints already exist.
@@ -71,7 +71,7 @@ The existing Android app uses PostgreSQL functions `fn_dz_scan_get_master_checkl
 
 IndexedDB commits local inspection / completion and outbox atomically. Sync is automatic while the PWA is OPEN; mobile browsers may suspend background execution. An event is only removed after server confirmation, with retry on transient errors. Both server endpoints must enforce UUID idempotency. If the browser storage is cleared before upload, unsent local data is lost; users must not use private/incognito browsing for field inspections. Provision offline device data during first online launch.
 
-Sync is deliberately single-active-run. Bootstrap is downloaded after pending events have been acknowledged to avoid overwriting edits. A future sync cursor and per-record conflict strategy should be introduced only when the existing server supports incremental changes.
+Sync is deliberately single-active-run. Bootstrap is downloaded after pending events have been acknowledged to avoid overwriting edits. Master rows use per-table server cursors and transactional delta upserts; schedule rows are replaced only after the complete server window is received.
 
 ## Security and deployment notes
 

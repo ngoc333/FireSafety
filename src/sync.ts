@@ -1,4 +1,4 @@
-import { applyBootstrap, currentEmployee, db } from './db';
+import { applyBootstrap, currentEmployee, db, getMasterCursors } from './db';
 import { detectConnection, loadBootstrap, uploadEvent } from './api';
 import type { ConnectionMode } from './types';
 
@@ -50,7 +50,7 @@ export async function syncNow(employeeId:string):Promise<void> {
     if (!sameSession()) return;
     const pending=await employeeDB.outbox.count();
     if (pending===0) {
-      const data=await loadBootstrap(employeeId);
+      const data=await loadBootstrap(employeeId,await getMasterCursors());
       if (!sameSession()) return;
       await applyBootstrap(data);
       publish({lastSync:new Date().toISOString(),lastError:''});

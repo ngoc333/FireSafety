@@ -34,11 +34,22 @@ test('LAN adapter authenticates, scopes bootstrap and never acknowledges writes'
       assert.equal(input.schema, 'rsm');
       assert.equal(input.params.p_emp_id, '12345678');
       functionNames.push(input.name);
-      const rows = input.name === 'fn_dz_scan_get_locations'
-        ? [{ PLANT_CD: '2210', AREA_LOC: 'A', WS_LOC: 'W', SUB_WS_LOC: 'E',
-          SUB_WS_ID: 'QR1', SUB_WS_NAME: 'Machine', ITEM_GROUP_CD: 'G' }]
-        : [];
-      reply = { success: true, rowCount: rows.length, data: rows };
+      if (input.name === 'dz_web_get_master') {
+        const type = input.params.p_type;
+        const rows = type === 'EQUIPMENT'
+          ? [{ equip_id: 'E', loc_cd: 'W', equip_type: 'G', equip_spec: 'Machine', use_yn: 'Y', create_date: '2026-11-10T00:00:00Z', update_date: '2026-11-10T00:00:00Z' }]
+          : type === 'LOCATION'
+            ? [{ area_cd: '2210', fty_cd: 'F', fty_nm: 'Factory', building_cd: 'B', building_nm: 'Building', loc_cd: 'W', loc_name: 'Room', use_yn: 'Y', create_date: '2026-11-10T00:00:00Z', update_date: '2026-11-10T00:00:00Z' }]
+            : [];
+        reply = { success: true, rowCount: 1, data: [{ dz_web_get_master: {
+          type, syncAt: '2026-11-10T00:00:00Z', data: rows,
+          ...(type === 'SCHEDULE' ? { windowFrom: '2026-11-03', windowTo: '2026-11-17' } : {})
+        } }] };
+      } else if (input.name === 'fn_dz_scan_get_open_repairs') {
+        reply = { success: true, rowCount: 0, data: [] };
+      } else {
+        reply = { success: true, rowCount: 0, data: [] };
+      }
     } else {
       res.writeHead(404); res.end(); return;
     }
@@ -83,8 +94,10 @@ test('LAN adapter authenticates, scopes bootstrap and never acknowledges writes'
     assert.equal(result.status, 200);
     const bootstrap = await result.json();
     assert.equal(bootstrap.profile.employeeId, '12345678');
-    assert.equal(bootstrap.locations[0].subWsId, 'QR1');
-    assert.equal(functionNames.length, 5);
+    assert.equal(bootstrap.masters.equipment.data[0].equip_id, 'E');
+    assert.equal(bootstrap.masters.location.data[0].loc_cd, 'W');
+    assert.equal(functionNames.filter(x => x === 'dz_web_get_master').length, 6);
+    assert.equal(functionNames.includes('fn_dz_scan_get_open_repairs'), true);
     const write = await fetch(base + '/events', { method: 'POST', headers: { Cookie: cookie } });
     assert.equal(write.status, 501);
     assert.equal((await write.json()).success, false);

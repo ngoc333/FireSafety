@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, CalendarDays, Check, ChevronRight, ClipboardC
 import { activateEmployee, db, identityDB, saveCompletion, saveInspection } from './db';
 import { detectConnection, signIn, signOut, target } from './api';
 import { observeSync, startAutoSync, syncNow, type SyncState } from './sync';
-import { locationKey, type ChecklistItem, type Countermeasure, type InspectionAnswer, type Location, type Profile, type Repair, type Schedule } from './types';
+import { equipmentView, locationKey, scheduleView, type ChecklistItem, type CountermeasureItem, type InspectionAnswer, type LocationView, type Profile, type Repair, type Schedule } from './types';
 
 type Tab = 'home'|'schedule'|'repairs'|'history';
 const today=()=>new Date().toISOString().slice(0,10).replace(/-/g,'');
@@ -19,15 +19,15 @@ export default function App() {
   const [error,setError]=useState('');
   const [tab,setTab]=useState<Tab>('home');
   const [sync,setSync]=useState<SyncState>(emptySync);
-  const [locations,setLocations]=useState<Location[]>([]);
+  const [locations,setLocations]=useState<LocationView[]>([]);
   const [schedules,setSchedules]=useState<Schedule[]>([]);
   const [repairs,setRepairs]=useState<Repair[]>([]);
   const [history,setHistory]=useState<{id:string;equipId:string;checkDate:string;bad:number;total:number}[]>([]);
   const [query,setQuery]=useState('');
-  const [selected,setSelected]=useState<Location|null>(null);
+  const [selected,setSelected]=useState<LocationView|null>(null);
   const [answers,setAnswers]=useState<InspectionAnswer[]>([]);
   const [items,setItems]=useState<ChecklistItem[]>([]);
-  const [counters,setCounters]=useState<Countermeasure[]>([]);
+  const [counters,setCounters]=useState<CountermeasureItem[]>([]);
   const [selectedSchedule,setSelectedSchedule]=useState('');
   const [measureIndex,setMeasureIndex]=useState<number|null>(null);
   const [repair,setRepair]=useState<Repair|null>(null);
@@ -41,13 +41,18 @@ export default function App() {
 
   const reload=useCallback(async()=>{
     const currentDB = db;
-    const [loc,sch,rep,ins,completed]=await Promise.all([
-      currentDB.locations.toArray(),currentDB.schedules.toArray(),currentDB.repairs.toArray(),
+    const [locationRows,equipmentRows,sch,rep,ins,completed]=await Promise.all([
+      currentDB.location.toArray(),currentDB.equipment.toArray(),currentDB.schedule.toArray(),currentDB.repairs.toArray(),
       currentDB.inspections.orderBy('createdAt').reverse().limit(100).toArray(),
       currentDB.completions.toArray()
     ]);
     if (currentDB !== db) return;
-    setLocations(loc);setSchedules(sch);
+    const locByCode=new Map(locationRows.filter(x=>x.use_yn==='Y').map(x=>[x.loc_cd,x]));
+    const loc=equipmentRows.filter(x=>x.use_yn==='Y').map(x=>{
+      const location=locByCode.get(x.loc_cd);
+      return location?equipmentView(x,location):null;
+    }).filter((x):x is LocationView=>x!==null);
+    setLocations(loc);setSchedules(sch.filter(x=>x.use_yn==='Y'));
     const completedIds=new Set(completed.map(x=>x.repairId));
     setRepairs(rep.filter(x=>!completedIds.has(x.id)&&x.actionStatus!=='COMPLETED'));
     setHistory(ins.map(x=>({id:x.id,equipId:x.equipId,checkDate:x.checkDate,bad:x.items.filter(y=>y.checkResult==='NO OK').length,total:x.items.length})));
@@ -103,18 +108,18 @@ export default function App() {
     setProfile(null);setSelected(null);setTab('home');setError('');
     setLocations([]);setSchedules([]);setRepairs([]);setHistory([]);
   }
-  async function openLocation(loc:Location){
+  async function openLocation(loc:LocationView){
     setError('');
-    const checklist=await db.items.where('itemGroupCd').equals(loc.itemGroupCd).toArray();
-    const options=await db.countermeasures.where('itemGroupCd').equals(loc.itemGroupCd).toArray();
+    const checklist=await db.checklist_item.where('equip_type').equals(loc.itemGroupCd).filter(x=>x.use_yn==='Y').toArray();
+    const options=await db.countermeasure_item.where('equip_type').equals(loc.itemGroupCd).filter(x=>x.use_yn==='Y').toArray();
     if(!checklist.length){setFlash('Chưa có checklist offline. Mở ứng dụng khi có mạng để tải dữ liệu.');return;}
-    const matching=schedules.filter(x=>locationKey(x)===locationKey(loc));
+    const matching=schedules.filter(x=>locationKey(scheduleView(x))===locationKey(loc));
     const d=today();
-    const within=matching.filter(s=>Math.abs((new Date(isoDate(s.scheduleDate)).getTime()-new Date(isoDate(d)).getTime())/86400000)<=7);
-    const picked=within.find(x=>x.scheduleDate===d)??within.filter(x=>!x.isChecked&&x.scheduleDate<d).sort((a,b)=>b.scheduleDate.localeCompare(a.scheduleDate))[0]??within.filter(x=>!x.isChecked).sort((a,b)=>a.scheduleDate.localeCompare(b.scheduleDate))[0];
-    setSelectedSchedule(picked?.scheduleDate??'');
+    const within=matching.filter(s=>Math.abs((new Date(isoDate(s.schedule_date)).getTime()-new Date(isoDate(d)).getTime())/86400000)<=7);
+    const picked=within.find(x=>x.schedule_date===d)??within.filter(x=>x.checked!=='Y'&&x.schedule_date<d).sort((a,b)=>b.schedule_date.localeCompare(a.schedule_date))[0]??within.filter(x=>x.checked!=='Y').sort((a,b)=>a.schedule_date.localeCompare(b.schedule_date))[0];
+    setSelectedSchedule(picked?.schedule_date??'');
     setSelected(loc);setItems(checklist);setCounters(options);
-    setAnswers(checklist.map(x=>({itemId:x.itemCd,checkResult:'OK',counterId:'',dueDate:''})));
+     setAnswers(checklist.map(x=>({itemId:x.item_id,checkResult:'OK',counterId:'',dueDate:''})));
     setTab('home');
   }
   function changeAnswer(index:number,patch:Partial<InspectionAnswer>){
@@ -132,7 +137,7 @@ export default function App() {
       await saveInspection({id,employeeId:profile.employeeId,plantCd:selected.plantCd,
         equipId:selected.subWsLoc,scheduleDate:selectedSchedule,checkDate:today(),
         createdAt:new Date().toISOString(),
-        items:answers.map(x=>({...x,dueDate:x.dueDate.replace(/-/g,'')}))});
+         items:answers.map(x=>({...x,dueDate:x.dueDate.replace(/-/g,'')}))});
       setSelected(null);setFlash('Đã lưu an toàn trên máy. Tự đồng bộ khi kết nối.');await reload();
       void syncNow(profile.employeeId);
     }catch(e){setFlash(e instanceof Error?e.message:String(e));}
@@ -146,7 +151,8 @@ export default function App() {
       await saveCompletion({
         id:crypto.randomUUID(),employeeId:profile.employeeId,repairId:repair.id,
         plantCd:repair.plantCd,equipId:repair.subWsLoc,scheduleDate:repair.scheduleDate,
-        itemId:repair.itemCd,completionComment:comment.trim(),completedAt:new Date().toISOString()
+         areaLoc:repair.areaLoc,wsLoc:repair.wsLoc,itemGroupCd:repair.itemGroupCd,
+         itemId:repair.itemCd,checkDate:repair.checkDate,completionComment:comment.trim(),completedAt:new Date().toISOString()
       });
       setRepair(null);setComment('');setFlash('Đã lưu khắc phục, chờ tự đồng bộ.');
       await reload();void syncNow(profile.employeeId);
@@ -157,7 +163,7 @@ export default function App() {
   const filteredLocations=useMemo(()=>locations.filter(x=>
     [x.subWsId,x.subWsName,x.factoryName,x.buildingName,x.locationName].join(' ').toLocaleLowerCase().includes(query.toLocaleLowerCase())
   ).slice(0,40),[locations,query]);
-  const completedCount=schedules.filter(x=>x.isChecked).length;
+   const completedCount=schedules.filter(x=>x.checked==='Y').length;
   const notOk=answers.filter(x=>x.checkResult==='NO OK').length;
 
   async function startQr(){
@@ -222,8 +228,8 @@ export default function App() {
       <div className="schedule-note"><CalendarDays size={16}/> Lịch: <b>{displayDate(selectedSchedule)}</b><span>{items.length} mục</span></div>
       <div className="section-heading"><h3>Danh sách kiểm tra</h3><small>{notOk} mục NO OK</small></div>
       <div className="checklist">
-        {items.map((item,i)=><div className="checkline" key={item.itemCd}>
-          <div className="checklabel"><b>{i+1}.</b><span>{item.itemNameVn||item.itemNameEn||item.itemCd}</span></div>
+         {items.map((item,i)=><div className="checkline" key={item.item_id}>
+           <div className="checklabel"><b>{i+1}.</b><span>{item.item_name_vn||item.item_name_en||item.item_id}</span></div>
           <div className="checkactions">
             <button className={answers[i]?.checkResult==='OK'?'result-button ok active':'result-button ok'} onClick={()=>changeAnswer(i,{checkResult:'OK',counterId:'',dueDate:''})}>OK</button>
             <button className={answers[i]?.checkResult==='NO OK'?'result-button no active':'result-button no'} onClick={()=>{changeAnswer(i,{checkResult:'NO OK'});setMeasureIndex(i);}}>NO</button>
@@ -245,10 +251,11 @@ export default function App() {
       </>}
       {tab==='schedule'&&<>
         <div className="page-heading"><div><small>KẾ HOẠCH</small><h2>Lịch kiểm tra</h2></div><CalendarDays className="heading-icon" size={27}/></div>
-        <div className="list">{[...schedules].sort((a,b)=>a.scheduleDate.localeCompare(b.scheduleDate)).slice(0,80).map((s,i)=>{
-          const loc=locations.find(x=>locationKey(x)===locationKey(s));
-          return <button key={i} className="list-card" disabled={!loc} onClick={()=>loc&&void openLocation(loc)}>
-            <span className={'item-icon '+(s.isChecked?'done':'')}><CalendarDays size={18}/></span><span className="card-main"><b>{loc?.subWsName||s.subWsLoc}</b><small>{displayDate(s.scheduleDate)} · {loc?.locationName||s.wsLoc}</small></span><span className={'status '+(s.isChecked?'success':'pending')}>{s.isChecked?'Đã kiểm':'Chưa kiểm'}</span></button>;
+         <div className="list">{[...schedules].sort((a,b)=>a.schedule_date.localeCompare(b.schedule_date)).slice(0,80).map((s,i)=>{
+           const view=scheduleView(s);
+           const loc=locations.find(x=>locationKey(x)===locationKey(view));
+           return <button key={i} className="list-card" disabled={!loc} onClick={()=>loc&&void openLocation(loc)}>
+             <span className={'item-icon '+(s.checked==='Y'?'done':'')}><CalendarDays size={18}/></span><span className="card-main"><b>{loc?.subWsName||s.equip_id}</b><small>{displayDate(s.schedule_date)} · {loc?.locationName||s.loc_cd}</small></span><span className={'status '+(s.checked==='Y'?'success':'pending')}>{s.checked==='Y'?'Đã kiểm':'Chưa kiểm'}</span></button>;
         })}{!schedules.length&&<p className="empty">Chưa có lịch kiểm tra trên thiết bị.</p>}</div>
       </>}
       {tab==='repairs'&&<>
@@ -268,9 +275,9 @@ export default function App() {
     </nav>}
     {measureIndex!==null&&selected&&<div className="modal-backdrop" onClick={()=>setMeasureIndex(null)}><section className="bottom-sheet" onClick={e=>e.stopPropagation()}>
       <div className="sheet-handle"/><div className="sheet-title"><h3>Biện pháp xử lý</h3><button onClick={()=>setMeasureIndex(null)} aria-label="Đóng"><X size={19}/></button></div>
-      <p>{items[measureIndex]?.itemNameVn||items[measureIndex]?.itemCd}</p>
-      <label>Biện pháp khắc phục</label><select value={answers[measureIndex]?.counterId??''} onChange={e=>changeAnswer(measureIndex,{counterId:e.target.value})}><option value="">Chọn biện pháp</option>
-        {counters.filter(x=>x.itemCd===items[measureIndex]?.itemCd).map(c=><option key={c.counterId} value={c.counterId}>{c.counterName}</option>)}</select>
+       <p>{items[measureIndex]?.item_name_vn||items[measureIndex]?.item_id}</p>
+       <label>Biện pháp khắc phục</label><select value={answers[measureIndex]?.counterId??''} onChange={e=>changeAnswer(measureIndex,{counterId:e.target.value})}><option value="">Chọn biện pháp</option>
+         {counters.filter(x=>x.item_id===items[measureIndex]?.item_id).map(c=><option key={c.counter_id} value={c.counter_id}>{c.counter_name_vn||c.counter_name_en}</option>)}</select>
       <label>Ngày hoàn thành dự kiến</label><input type="date" min={new Date().toISOString().slice(0,10)} value={answers[measureIndex]?.dueDate??''} onChange={e=>changeAnswer(measureIndex,{dueDate:e.target.value})}/>
       <button className="btn primary" onClick={()=>{if(!answers[measureIndex].counterId||!answers[measureIndex].dueDate){setFlash('Vui lòng chọn biện pháp và ngày hoàn thành.');return;}setMeasureIndex(null);}}>Xác nhận</button>
     </section></div>}

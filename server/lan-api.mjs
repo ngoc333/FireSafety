@@ -2,7 +2,7 @@
 // No browser credentials. Writes fail closed until atomic DB idempotency is confirmed.
 import { createServer } from 'node:http';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { rsmRows, mapBootstrap } from './rsm-mapping.mjs';
+import { rsmRows, rsmJson, mapRepairs } from './rsm-mapping.mjs';
 
 const root = '/api/fire-safety';
 const port = Number(process.env.FS_LAN_PORT || 5088);
@@ -129,26 +129,28 @@ async function rsmCall(name, params) {
   if (!result.ok) throw Error('RSM ' + name + ' HTTP ' + result.status);
   return rsmRows(result.payload);
 }
-function dateWindow() {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en', {
-    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(new Date()).map(x => [x.type, x.value]));
-  const utc = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
-  return [-7, 7].map(days => new Date(utc.getTime() + days * 86400000)
-    .toISOString().slice(0, 10));
+async function rsmJsonCall(name, params) {
+  const payload = { name, schema: 'rsm', database: null, kind: 'function', params };
+  let result = await jsonPost(rsmBase + '/api/Db/call', payload, await getToken());
+  if (result.status === 401) {
+    accessToken = '';
+    result = await jsonPost(rsmBase + '/api/Db/call', payload, await getToken());
+  }
+  if (!result.ok) throw Error('RSM ' + name + ' HTTP ' + result.status);
+  return rsmJson(result.payload, name);
 }
-async function bootstrap(profile) {
-  const id = profile.employeeId, [from, to] = dateWindow();
-  const employee = { p_emp_id: id };
-  const range = { ...employee, p_from_date: from, p_to_date: to };
-  const [locations, items, countermeasures, schedules, repairs] = await Promise.all([
-    rsmCall('fn_dz_scan_get_locations', employee),
-    rsmCall('fn_dz_scan_get_master_checklists', employee),
-    rsmCall('fn_dz_scan_get_master_countermeasures', employee),
-    rsmCall('fn_dz_scan_get_schedule', range),
-    rsmCall('fn_dz_scan_get_open_repairs', employee)
-  ]);
-  return mapBootstrap({ profile, locations, items, countermeasures, schedules, repairs });
+const masterTypes = ['CHECKLIST_ITEM', 'CODE', 'COUNTERMEASURE_ITEM', 'EQUIPMENT', 'LOCATION', 'SCHEDULE'];
+async function bootstrap(profile, cursors = {}) {
+  const employee = { p_emp_id: profile.employeeId };
+  const masters = await Promise.all(masterTypes.map(async type => {
+    const key = type.toLowerCase();
+    const params = { ...employee, p_type: type };
+    if (type !== 'SCHEDULE') params.p_updated_after = cursors[key] || null;
+    else params.p_updated_after = null;
+    return [key, await rsmJsonCall('dz_web_get_master', params)];
+  }));
+  const repairs = mapRepairs(await rsmCall('fn_dz_scan_get_open_repairs', employee));
+  return { profile, masters: Object.fromEntries(masters), repairs };
 }
 
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error('Invalid FS_LAN_PORT');
@@ -188,11 +190,14 @@ if (!ready) {
       const identity = readSession(req);
       if (!identity) { respond(res, 401, { error: 'Session expired' }); return; }
       if (req.method === 'GET' && path === root + '/bootstrap') {
-        const requested = new URL(req.url, 'http://localhost').searchParams.get('employeeId');
+        const query = new URL(req.url, 'http://localhost').searchParams;
+        const requested = query.get('employeeId');
         if (requested && requested !== identity.employeeId) {
           respond(res, 403, { error: 'Employee mismatch' }); return;
         }
-        respond(res, 200, await bootstrap(identity)); return;
+        const cursors = Object.fromEntries(['checklist_item','code','countermeasure_item','equipment','location']
+          .map(type => [type, query.get(type) || '']));
+        respond(res, 200, await bootstrap(identity, cursors)); return;
       }
       if (req.method === 'POST' && path === root + '/events') {
         // Never acknowledge without an atomic event ID contract in PostgreSQL.

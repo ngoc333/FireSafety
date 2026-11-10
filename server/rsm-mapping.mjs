@@ -31,6 +31,41 @@ export function rsmRows(root) {
   throw Error('RSM response does not contain an array of rows');
 }
 
+// dz_web_get_master returns one jsonb value. RSM commonly wraps that value in
+// data[0].<functionName>; accept the other gateway envelopes as well so the
+// database column shape is normalized in the LAN adapter, not in React.
+export function rsmJson(root, functionName) {
+  let value = root;
+  const directType = prop(root, 'type');
+  const nestedData = prop(root, 'data');
+  const nestedValue = nestedData && typeof nestedData === 'object' && !Array.isArray(nestedData)
+    ? prop(nestedData, functionName) : undefined;
+  if (nestedValue !== undefined) {
+    value = nestedValue;
+  } else if (!directType && (Array.isArray(root) || prop(root, 'rows') || prop(root, 'result') || prop(root, 'data'))) {
+    const rows = rsmRows(root);
+    value = rows.length === 1 ? rows[0] : rows;
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    value = prop(value, functionName) ?? prop(value, 'result') ?? prop(value, 'value') ?? value;
+  }
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch { throw Error('RSM master response contains invalid JSON'); }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw Error('RSM master response is not an object');
+  }
+  const type = str(value, 'type');
+  const syncAt = str(value, 'syncAt', 'sync_at');
+  const rows = prop(value, 'data');
+  if (!type || !syncAt || !Array.isArray(rows)) throw Error('RSM master response is incomplete');
+  return {
+    type, syncAt, data: rows,
+    ...(str(value, 'windowFrom', 'window_from') ? {windowFrom: str(value, 'windowFrom', 'window_from')} : {}),
+    ...(str(value, 'windowTo', 'window_to') ? {windowTo: str(value, 'windowTo', 'window_to')} : {})
+  };
+}
+
 export function mapBootstrap({ profile, locations, items, countermeasures, schedules, repairs }) {
   const loc = locations.map(r => ({
     plantCd: str(r, 'PLANT_CD'), areaLoc: str(r, 'AREA_LOC'),
@@ -81,4 +116,23 @@ export function mapBootstrap({ profile, locations, items, countermeasures, sched
   });
   return { profile, locations: loc, items: checkItems,
     countermeasures: counters, schedules: dates, repairs: repairList };
+}
+
+export function mapRepairs(repairs) {
+  return repairs.map(r => {
+    const plantCd = str(r, 'PLANT_CD'), areaLoc = str(r, 'AREA_LOC');
+    const wsLoc = str(r, 'WS_LOC'), subWsLoc = str(r, 'SUB_WS_LOC');
+    const itemGroupCd = str(r, 'ITEM_GROUP_CD'), itemCd = str(r, 'ITEM_CD');
+    const scheduleDate = dateKey(str(r, 'SCHEDULE_DATE'));
+    const checkDate = dateKey(str(r, 'CHECK_DATE'));
+    return {
+      id: [plantCd, areaLoc, wsLoc, subWsLoc, itemGroupCd, itemCd, scheduleDate, checkDate].join('|'),
+      plantCd, areaLoc, wsLoc, subWsLoc, itemGroupCd, itemCd, scheduleDate, checkDate,
+      itemName: str(r, 'ITEM_NAME_VN') || itemCd,
+      equipmentName: str(r, 'SUB_WS_NAME') || subWsLoc,
+      countermeasureName: str(r, 'CHECK_CM_VN', 'CHECK_CM'),
+      completeDate: dateKey(str(r, 'COMPLETE_DATE')),
+      actionStatus: str(r, 'ACTION_STATUS') || 'OPEN'
+    };
+  });
 }
