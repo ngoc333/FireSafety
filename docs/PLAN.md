@@ -6,13 +6,13 @@
 
 - **Default/stable:** `main` (contains the agent harness; feature code is not promoted until tested).
 - **Active development branch:** `local` (LAN + internal PostgreSQL). **Internet:** deferred.
-- **Current focus:** apply and verify the reviewed RSM master migration, then validate `dz_web_get_master` through the real RSM Gateway; after that confirm atomic PostgreSQL idempotent write functions.
-- **Master sync status:** six PostgreSQL-shaped IndexedDB v2 stores, per-master cursors and ±7-day schedule replacement are implemented and mock-tested locally; the RSM migration/function are not yet applied.
-- **Last completed:** existing frontend foundation and hostname/IndexedDB isolation; implemented read-only LAN Node gateway and RSM row mapping on `local` (commits `d65a3ec8`, `81352f5e`, `07e44a64`). Mock Oracle/RSM integration test, mapping tests, `npm test` and React build **passed** (GitHub Actions `42743749875`). This does not prove a real LAN database connection.
-- **Known blockers:** PostgreSQL migration/function definitions have not been applied; live RSM/Oracle response envelopes and permissions are not verified; LAN adapter is not deployed. No atomic event UUID deduplication or photo-free repair write function is confirmed, so `/events` deliberately returns HTTP 501. Unscoped legacy `FireSafety` IndexedDB is not auto-migrated.
+- **Current focus:** validate `dz_web_get_master` through the real RSM Gateway/LAN adapter, then confirm atomic PostgreSQL idempotent write functions.
+- **Master sync status:** six PostgreSQL-shaped IndexedDB v2 stores, per-master cursors and ±7-day schedule replacement are implemented; the RSM migration and direct PostgreSQL function checks are verified, while gateway/device verification remains open.
+- **Last completed:** PostgreSQL migration and direct RSM verification passed on `local`; six master types returned real data (14/26/26/1,394/1,394/1,591 rows), schedule window was `2026-11-03` through `2026-11-17`, and future delta returned zero rows. Local mock tests and React build also pass. This does not prove the RSM Gateway/LAN adapter or a real browser/device flow.
+- **Known blockers:** RSM Gateway response envelopes, permissions and LAN adapter access are not verified. No atomic event UUID deduplication or photo-free repair write function is confirmed, so `/events` deliberately returns HTTP 501. Unscoped legacy `FireSafety` IndexedDB is not auto-migrated.
 - **Not yet verified:** real LAN authentication/data access, full inspection/repair flow, physical phone QR, PWA offline/reconnect, event retry/idempotency, on-device multi-user cache isolation, or cloud synchronization.
-- **Next task (one):** have an authorized database operator review/apply `server/sql/001_dz_web_master_sync.sql`, then capture redacted `dz_web_get_master` responses and verify the six-master bootstrap against the real RSM Gateway.
-- **Last documentation update:** 2026-11-10 (six-master IndexedDB/API contract and reviewed-but-not-applied RSM migration).
+- **Next task (one):** run the LAN adapter with authorized gateway access and verify the six-master `/bootstrap` response, including the real RSM JSON envelope and cursor behavior.
+- **Last documentation update:** 2026-11-10 (migration applied and direct PostgreSQL master verification).
 
 ## Roadmap & checklist
 
@@ -29,8 +29,8 @@ Legend: `[x]` means the stated artifact/action is **verified**; `[ ]` means stil
 
 - [ ] Verify the real read/write functions, returned columns, employee identity and server-side permissions; document only the actual contracts.
 - [ ] Agree the common API semantics: RSM gateway response wrappers vs Supabase RPC, identity scope, input/output mapping and unambiguous write acknowledgments.
-- [ ] Review/apply `server/sql/001_dz_web_master_sync.sql`: `dz_code.use_yn`, `value06 -> use_yn` on the other five master tables, `timestamptz` audit fields and update triggers.
-- [ ] Verify the single `rsm.dz_web_get_master` contract for `CHECKLIST_ITEM`, `CODE`, `COUNTERMEASURE_ITEM`, `EQUIPMENT`, `LOCATION` and schedule ±7-day window.
+- [x] Review/apply `server/sql/001_dz_web_master_sync.sql`: `dz_code.use_yn`, `value06 -> use_yn` on the other five master tables, `timestamptz` audit fields and update triggers; direct RSM verification passed.
+- [x] Verify the single `rsm.dz_web_get_master` contract for `CHECKLIST_ITEM`, `CODE`, `COUNTERMEASURE_ITEM`, `EQUIPMENT`, `LOCATION` and schedule ±7-day window through direct PostgreSQL calls; RSM Gateway response verification remains open.
 - [x] Build the smallest LAN adapter **read-only foundation**: Oracle employee login, signed cookie, health, employee-scoped bootstrap, RSM read mapping, and mocked end-to-end test. No production verification yet.
 - [ ] Implement and verify the remaining durable, idempotent `/events` submission; currently responds HTTP 501.
 - [x] Implement/test mapping for locations, checklist items, countermeasures, schedules and open repairs against sample RSM-shaped rows.
