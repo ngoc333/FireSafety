@@ -6,12 +6,12 @@
 
 - **Default/stable:** `main` (contains the agent harness; feature code is not promoted until tested).
 - **Active development branch:** `local` (LAN + internal PostgreSQL). **Internet:** deferred.
-- **Current focus:** verify existing internal PostgreSQL functions and implement a minimal LAN API compatible with the React client.
-- **Last completed:** agent harness and initial React/PWA/outbox scaffold; added hostname-selected API routing, localhost override and per-backend/per-employee IndexedDB on `local` and `internet` (commit `4a9fc71a`). Built-in Node routing tests and React build passed on `local` (GitHub Actions run `42738435845`). Device/backend behavior is **not verified**.
-- **Known blockers:** no verified internal PostgreSQL function definitions/permissions, no implemented LAN API, no agreed photo-free repair write contract. Existing unscoped `FireSafety` IndexedDB records must not be auto-migrated without verifying event ownership and destination.
+- **Current focus:** validate the new read-only LAN adapter against real Oracle/RSM responses; then confirm atomic PostgreSQL idempotent write functions.
+- **Last completed:** existing frontend foundation and hostname/IndexedDB isolation; implemented read-only LAN Node gateway and RSM row mapping on `local` (commits `d65a3ec8`, `81352f5e`, `07e44a64`). Mock Oracle/RSM integration test, mapping tests, `npm test` and React build **passed** (GitHub Actions `42743749875`). This does not prove a real LAN database connection.
+- **Known blockers:** PostgreSQL function definitions/permissions and live RSM/Oracle response envelopes not verified; LAN adapter is not yet deployed. No atomic event UUID deduplication or photo-free repair write function is confirmed, so `/events` deliberately returns HTTP 501 and IndexedDB keeps pending writes. Unscoped legacy `FireSafety` IndexedDB is not auto-migrated.
 - **Not yet verified:** real LAN authentication/data access, full inspection/repair flow, physical phone QR, PWA offline/reconnect, event retry/idempotency, on-device multi-user cache isolation, or cloud synchronization.
-- **Next task (one):** inspect actual internal PostgreSQL procedures/functions used by DangerZoneScan; agree the minimal LAN API inputs/outputs and photo-free repair update **before writing production SQL**.
-- **Last documentation update:** 2026-11-10 (API selection/localhost override/IndexedDB ownership).
+- **Next task (one):** run the LAN adapter with authorized access to the real Oracle/RSM Gateway, capture **redacted example responses and SQL function signatures** (especially save-inspection and photo-free repair), then design an atomic event UUID acknowledgment before enabling `/events`.
+- **Last documentation update:** 2026-11-10 (read-only LAN adapter, mocked verification and integration blockers).
 
 ## Roadmap & checklist
 
@@ -28,8 +28,10 @@ Legend: `[x]` means the stated artifact/action is **verified**; `[ ]` means stil
 
 - [ ] Verify the real read/write functions, returned columns, employee identity and server-side permissions; document only the actual contracts.
 - [ ] Agree the common API semantics: RSM gateway response wrappers vs Supabase RPC, identity scope, input/output mapping and unambiguous write acknowledgments.
-- [ ] Implement the smallest secure LAN API needed by the client: health, authenticated login, employee-scoped bootstrap, and durable event submission.
-- [ ] Map locations, checklist items, countermeasures, schedules, results and open repairs from PostgreSQL into the React data shapes.
+- [x] Build the smallest LAN adapter **read-only foundation**: Oracle employee login, signed cookie, health, employee-scoped bootstrap, RSM read mapping, and mocked end-to-end test. No production verification yet.
+- [ ] Implement and verify the remaining durable, idempotent `/events` submission; currently responds HTTP 501.
+- [x] Implement/test mapping for locations, checklist items, countermeasures, schedules and open repairs against sample RSM-shaped rows.
+- [ ] Verify mapping against real RSM output; implement server-side inspection history/results in React API contract.
 - [ ] Support `NO OK` with countermeasure/due date and photo-free repair completion; adjust database contract **without inventing** existing functions.
 - [ ] Add idempotent event handling (unique event UUID), explicit acknowledgments and actionable failure messages.
 
@@ -76,3 +78,4 @@ At the end of a meaningful task, update **this file in the same commit or work s
 - Prior frontend baseline on `local` and `internet`: `af5eb95b` — GitHub Actions `npm run build` **passed** on both branches. Not an end-to-end validation.
 - 2026-11-10: `4a9fc71a` on `local` and `internet`: hostname routing, scoped IndexedDB, built-in Node unit tests. Local GitHub Actions run `42738435845` passed tests and build; Internet branch workflow triggered separately. Real-world testing remains open.
 - 2026-11-10: harness updated for `main`/`local`/`internet` with this shared plan. Harness text was checked against repository contents; no app/API behavior changed.
+- 2026-11-10: `local` commits `d65a3ec8`, `81352f5e`, `07e44a64`: LAN RSM adapter/read-only API, Vite proxy, mocked API/mapping tests; [GitHub Actions run 42743749875](https://github.com/ngoc333/FireSafety/actions/runs/42743749875) passed test/build. No live LAN testing; no write ACK until real PostgreSQL atomic contract exists.

@@ -41,7 +41,7 @@ Rewrite the Android app `DangerZoneScan` into an independent, mobile-first **Fir
 - Read mapping and write acknowledgments differ: the existing RSM gateway wraps PostgreSQL results (e.g. `success`, `rowCount`, `data`), while Supabase RPC exposes `data` and `error`. Normalize and validate them in the API layer, **never in individual UI screens**.
 - Do not expose RSM service credentials in React. The LAN path needs a trusted backend/proxy or securely authenticated user-specific gateway; Supabase requires authenticated RPC/RLS with employee authorization. Supabase Edge Functions are optional when RPC can do the job safely.
 - Locally stored identity metadata is separated by selected backend; business cache and outbox are separated by **both backend and employee**. Never send events to another account or backend. The earlier unscoped IndexedDB `FireSafety` is not automatically migrated because its event ownership/destination cannot be trusted.
-- **Implementation status:** `src/api-target.ts` and account-scoped Dexie switching are implemented and unit-tested on `local`/`internet`; live backend integration and real-device data isolation are still unverified.
+- **Implementation status:** `src/api-target.ts` and account-scoped Dexie selection exist on both development branches. The `local` branch additionally contains the small read-only Node LAN adapter (`server/lan-api.mjs`) calling the existing Oracle and RSM Gateways, and `server/rsm-mapping.mjs`; GitHub Actions `npm test`/`npm run build` passed with mock gateway tests. Actual LAN endpoints, SQL contracts, device data isolation and authorization are **not yet verified**.
 
 ## Backend and rollout sequence
 
@@ -60,7 +60,9 @@ The Android reference calls PostgreSQL/RSM functions including:
 
 Those names are **observed calls in the source**, not a verified specification of the server-side SQL definitions. Photo-free repair handling and the LAN API still need actual PostgreSQL contract verification and implementation. Do not assume a production repair-without-image function already exists.
 
-The initial PWA branch uses these *proposed* LAN routes: `POST /login`, `GET /health`, `GET /bootstrap`, `POST /events`. Treat these as frontend integration requirements to reconcile with the real server, **not endpoints already deployed**.
+The active `local` branch now implements these routes under `/api/fire-safety`: `POST /login`, `POST /logout`, `GET /health`, `GET /bootstrap`. They use Oracle `SMT_DOWNLOAD` for employee profile and RSM `/api/Db/call` for PostgreSQL reads, with server-side credentials and signed HttpOnly cookies. `GET /health` measures only adapter readiness, **not the actual database**. `POST /events` returns **501 intentionally** until there is a verified atomic, idempotent SQL write (including photo-free repair); never fake success. This is source implementation tested against mocks, **not deployed to LAN**.
+
+`GET /bootstrap` currently returns mapped locations, checklist items, countermeasures, schedules and open repairs. Downloading real completed inspection history from `fn_dz_scan_get_results` is **not yet implemented**. Use RSM field mapping for `AREA_CD`/`LOC_CD`/`EQUIP_ID` in schedules vs `AREA_LOC`/`WS_LOC`/`SUB_WS_LOC` in master data; validate with actual responses. Current LAN sign-in by employee ID matches the existing private Android workflow but is not strong Internet authentication; limit to trusted internal networks and enforce correct authorization server-side.
 
 ## Git branches and current implementation
 
