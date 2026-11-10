@@ -7,11 +7,11 @@
 - **Default/stable:** `main` (contains the agent harness; feature code is not promoted until tested).
 - **Active development branch:** `local` (LAN + internal PostgreSQL). **Internet:** deferred.
 - **Current focus:** verify existing internal PostgreSQL functions and implement a minimal LAN API compatible with the React client.
-- **Last completed:** agent rules and project context created; initial React/PWA/IndexedDB/outbox scaffold written on `local` and `internet`. Frontend `npm run build` passed in GitHub Actions on both development branches before this documentation update.
-- **Known blockers:** no verified internal PostgreSQL function definitions/permissions, no implemented LAN API, no agreed photo-free repair write contract.
-- **Not yet verified:** real LAN authentication/data access, full inspection/repair flow, physical phone QR, PWA offline/reconnect, event retry/idempotency, multi-user cache isolation, or cloud synchronization.
+- **Last completed:** agent harness and initial React/PWA/outbox scaffold; added hostname-selected API routing, localhost override and per-backend/per-employee IndexedDB on `local` and `internet` (commit `4a9fc71a`). Built-in Node routing tests and React build passed on `local` (GitHub Actions run `42738435845`). Device/backend behavior is **not verified**.
+- **Known blockers:** no verified internal PostgreSQL function definitions/permissions, no implemented LAN API, no agreed photo-free repair write contract. Existing unscoped `FireSafety` IndexedDB records must not be auto-migrated without verifying event ownership and destination.
+- **Not yet verified:** real LAN authentication/data access, full inspection/repair flow, physical phone QR, PWA offline/reconnect, event retry/idempotency, on-device multi-user cache isolation, or cloud synchronization.
 - **Next task (one):** inspect actual internal PostgreSQL procedures/functions used by DangerZoneScan; agree the minimal LAN API inputs/outputs and photo-free repair update **before writing production SQL**.
-- **Last documentation update:** 2026-11-10 (harness/branch workflow).
+- **Last documentation update:** 2026-11-10 (API selection/localhost override/IndexedDB ownership).
 
 ## Roadmap & checklist
 
@@ -27,6 +27,7 @@ Legend: `[x]` means the stated artifact/action is **verified**; `[ ]` means stil
 ### Phase 2 - Internal PostgreSQL & LAN API (current)
 
 - [ ] Verify the real read/write functions, returned columns, employee identity and server-side permissions; document only the actual contracts.
+- [ ] Agree the common API semantics: RSM gateway response wrappers vs Supabase RPC, identity scope, input/output mapping and unambiguous write acknowledgments.
 - [ ] Implement the smallest secure LAN API needed by the client: health, authenticated login, employee-scoped bootstrap, and durable event submission.
 - [ ] Map locations, checklist items, countermeasures, schedules, results and open repairs from PostgreSQL into the React data shapes.
 - [ ] Support `NO OK` with countermeasure/due date and photo-free repair completion; adjust database contract **without inventing** existing functions.
@@ -36,6 +37,7 @@ Legend: `[x]` means the stated artifact/action is **verified**; `[ ]` means stil
 
 - [x] Initial React + TypeScript mobile-first PWA UI and QR/manual-input interface **scaffold exists**.
 - [x] Initial IndexedDB/Dexie, local save and automatic outbox sync **scaffold exists**.
+- [x] Hostname-based backend selection, localhost `.env.local` override, separate IndexedDB by environment and employee **implemented**. Native Node routing tests and frontend build passed on `local`; not yet verified against running servers.
 - [ ] Verify login/offline reopening and strict separation of employee data on the same device.
 - [ ] Verify full inspection, schedule (existing ±7-day rule), history and repair journeys without any reporting/before/after photos.
 - [ ] Verify first online provisioning, PWA install, HTTPS and QR camera on real phones (manual QR entry remains available).
@@ -72,4 +74,5 @@ At the end of a meaningful task, update **this file in the same commit or work s
 ## Commits / verification notes
 
 - Prior frontend baseline on `local` and `internet`: `af5eb95b` — GitHub Actions `npm run build` **passed** on both branches. Not an end-to-end validation.
+- 2026-11-10: `4a9fc71a` on `local` and `internet`: hostname routing, scoped IndexedDB, built-in Node unit tests. Local GitHub Actions run `42738435845` passed tests and build; Internet branch workflow triggered separately. Real-world testing remains open.
 - 2026-11-10: harness updated for `main`/`local`/`internet` with this shared plan. Harness text was checked against repository contents; no app/API behavior changed.
