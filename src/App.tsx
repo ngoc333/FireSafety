@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ArrowLeft, CalendarDays, Check, ChevronRight, ClipboardCheck, Clock3, Flame, History, LogOut, MapPin, Search, ShieldCheck, Smartphone, Wifi, WifiOff, Wrench, X } from 'lucide-react';
-import { db, saveCompletion, saveInspection } from './db';
-import { signIn, signOut, target } from './api';
+import { activateEmployee, db, identityDB, saveCompletion, saveInspection } from './db';
+import { detectConnection, signIn, signOut, target } from './api';
 import { observeSync, startAutoSync, syncNow, type SyncState } from './sync';
 import { locationKey, type ChecklistItem, type Countermeasure, type InspectionAnswer, type Location, type Profile, type Repair, type Schedule } from './types';
 
@@ -40,11 +40,13 @@ export default function App() {
   const profileId=profile?.employeeId ?? '';
 
   const reload=useCallback(async()=>{
+    const currentDB = db;
     const [loc,sch,rep,ins,completed]=await Promise.all([
-      db.locations.toArray(),db.schedules.toArray(),db.repairs.toArray(),
-      db.inspections.orderBy('createdAt').reverse().limit(100).toArray(),
-      db.completions.toArray()
+      currentDB.locations.toArray(),currentDB.schedules.toArray(),currentDB.repairs.toArray(),
+      currentDB.inspections.orderBy('createdAt').reverse().limit(100).toArray(),
+      currentDB.completions.toArray()
     ]);
+    if (currentDB !== db) return;
     setLocations(loc);setSchedules(sch);
     const completedIds=new Set(completed.map(x=>x.repairId));
     setRepairs(rep.filter(x=>!completedIds.has(x.id)&&x.actionStatus!=='COMPLETED'));
@@ -53,13 +55,17 @@ export default function App() {
 
   useEffect(()=>{
     let mounted=true;
-    void db.settings.get('currentEmployee').then(async x=>{
+    void identityDB.settings.get('currentEmployee').then(async x=>{
       if(!mounted||!x?.value)return;
-      const cached=await db.profiles.get(x.value);
-      if(mounted&&cached){setProfile(cached);setLoginId(cached.employeeId);}
+      const cached=await identityDB.profiles.get(x.value);
+      if(mounted&&cached){
+        activateEmployee(cached.employeeId);
+        setProfile(cached);setLoginId(cached.employeeId);
+        void reload();
+      }
     });
     return ()=>{mounted=false;};
-  },[]);
+  },[reload]);
   useEffect(()=>{
     void reload();
     return observeSync(s=>{setSync(s);if(!s.running&&!s.lastError&&s.lastSync)void reload();});
@@ -79,20 +85,23 @@ export default function App() {
       catch(e){
         // Previously verified employee can resume offline on the SAME DEVICE.
         // This is convenience only, not a replacement for server-side authorization.
-        const cached=await db.profiles.get(id);
-        if(!cached||sync.connection!=='offline')throw e;
+        const cached=await identityDB.profiles.get(id);
+        if(!cached||await detectConnection()!=='offline')throw e;
         user=cached;
       }
-      await db.profiles.put(user);
-      await db.settings.put({key:'currentEmployee',value:user.employeeId});
+      activateEmployee(user.employeeId);
+      await identityDB.profiles.put(user);
+      await identityDB.settings.put({key:'currentEmployee',value:user.employeeId});
       setProfile(user);setPassword('');
       void syncNow(user.employeeId);await reload();
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
   async function logout(){
-    await signOut();await db.settings.delete('currentEmployee');
+    await signOut();await identityDB.settings.delete('currentEmployee');
+    activateEmployee(null);
     setProfile(null);setSelected(null);setTab('home');setError('');
+    setLocations([]);setSchedules([]);setRepairs([]);setHistory([]);
   }
   async function openLocation(loc:Location){
     setError('');

@@ -1,12 +1,15 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { resolveApiTarget } from './api-target';
 import type { BootstrapData, OutboxEvent, Profile } from './types';
 
-export const target = import.meta.env.VITE_DEPLOY_TARGET === 'internet' ? 'internet' : 'lan';
+export const target = resolveApiTarget(window.location.hostname, import.meta.env.VITE_DEPLOY_TARGET);
 const lanUrl = (import.meta.env.VITE_LAN_API_BASE as string | undefined)?.replace(/\/$/,'') ?? '';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 export const supabase: SupabaseClient | null =
-  supabaseUrl && anonKey ? createClient(supabaseUrl, anonKey, {auth:{persistSession:true,autoRefreshToken:true}}) : null;
+  target === 'internet' && supabaseUrl && anonKey
+    ? createClient(supabaseUrl, anonKey, {auth:{persistSession:true,autoRefreshToken:true}})
+    : null;
 
 let lanSession = '';
 function timeoutSignal(): AbortSignal { return AbortSignal.timeout(6000); }

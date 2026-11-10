@@ -1,4 +1,4 @@
-import { applyBootstrap, db } from './db';
+import { applyBootstrap, currentEmployee, db } from './db';
 import { detectConnection, loadBootstrap, uploadEvent } from './api';
 import type { ConnectionMode } from './types';
 
@@ -16,36 +16,53 @@ export function currentSync():SyncState {return {...state};}
 
 export async function syncNow(employeeId:string):Promise<void> {
   if (running) return;
+  const employeeDB = db;
+  // Never upload when signed out or use a different employee's queue.
+  if (!employeeId || currentEmployee() !== employeeId) return;
   running=true;publish({running:true});
+  const sameSession=()=>db===employeeDB && currentEmployee()===employeeId;
   try {
     const connection=await detectConnection();
-    publish({connection,pending:await db.outbox.count()});
-    if(connection==='offline'||!employeeId) return;
-    const events=await db.outbox.orderBy('createdAt').toArray();
+    if (!sameSession()) return;
+    publish({connection,pending:await employeeDB.outbox.count()});
+    if(connection==='offline') return;
+    const events=await employeeDB.outbox.orderBy('createdAt').toArray();
     for(const event of events) {
+      if (!sameSession()) return;
+      if (event.payload.employeeId !== employeeId) {
+        throw new Error('Outbox event belongs to a different employee');
+      }
       if(event.nextAttemptAt>Date.now()) continue;
       try {
         await uploadEvent(event);
-        await db.outbox.delete(event.id); // acknowledgment required before deletion
+        if (!sameSession()) return;
+        await employeeDB.outbox.delete(event.id); // explicit server ACK required
       } catch(e) {
+        if (!sameSession()) return;
         const attempts=event.attempts+1;
-        await db.outbox.update(event.id,{
+        await employeeDB.outbox.update(event.id,{
           attempts, lastError:e instanceof Error?e.message:String(e),
           nextAttemptAt:Date.now()+Math.min(5*60_000,Math.pow(2,attempts)*3000)
         });
-        throw e; // do not overwrite offline writes with a stale bootstrap
+        throw e;
       }
     }
-    const pending=await db.outbox.count();
+    if (!sameSession()) return;
+    const pending=await employeeDB.outbox.count();
     if (pending===0) {
       const data=await loadBootstrap(employeeId);
+      if (!sameSession()) return;
       await applyBootstrap(data);
       publish({lastSync:new Date().toISOString(),lastError:''});
     }
     publish({pending});
   } catch(e) {
-    publish({lastError:e instanceof Error?e.message:String(e)});
-  } finally {running=false;publish({running:false,pending:await db.outbox.count()});}
+    if (sameSession()) publish({lastError:e instanceof Error?e.message:String(e)});
+  } finally {
+    running=false;
+    if (sameSession()) publish({running:false,pending:await employeeDB.outbox.count()});
+    else publish({connection:'offline',running:false,pending:0,lastSync:'',lastError:''});
+  }
 }
 
 export function startAutoSync(employeeId:()=>string) {

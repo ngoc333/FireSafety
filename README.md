@@ -25,8 +25,18 @@ npm run dev
 npm run build
 ```
 
-For LAN builds, `VITE_DEPLOY_TARGET=lan` and `VITE_LAN_API_BASE=https://your-internal-host/api/fire-safety`.
-For Vercel builds, `VITE_DEPLOY_TARGET=internet`, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in Vercel, and deploy `supabase/schema.sql` and `supabase/functions/firesafety/index.ts` first.
+### API routing
+
+- `localhost`, `127.0.0.1`, `::1`: choose `VITE_DEPLOY_TARGET=lan` or `internet` in `.env.local`, then restart Vite.
+- `*.dskorea.com` and private IPv4 addresses (`10/8`, `172.16/12`, `192.168/16`): LAN API.
+- Other hostnames (including `*.vercel.app`): Supabase.
+- Routing is selected **once by the website hostname**; an unreachable configured backend means offline. **Never silently fail over to the other backend.** Hostnames are not a security boundary.
+
+For LAN, configure `VITE_LAN_API_BASE`. For Supabase, set `VITE_SUPABASE_URL` and the public `VITE_SUPABASE_ANON_KEY` and deploy the required backend components before attempting integration. Internet/Supabase remains a scaffold, not yet an accepted release.
+
+### IndexedDB scoping
+
+The metadata store is `FireSafety_identity_<target>`, and business data/outbox are `FireSafety_<target>_<employeeId>`, so even on the same `localhost` origin LAN and Supabase cannot share cached records. Signing out retains unsent events in that employee's database for later login. The older unscoped `FireSafety` IndexedDB is intentionally **not auto-migrated**: its original environment/employee cannot be verified, so review any pending data there before relying on the new version.
 
 **Do not ship internal credentials to browsers.** Vite environment variables are public by design. Never put PostgreSQL credentials, service role keys or shared RSM tokens here.
 
