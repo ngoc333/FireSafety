@@ -32,6 +32,17 @@ Rewrite the Android app `DangerZoneScan` into an independent, mobile-first **Fir
 - Detect LAN and Internet through **actual endpoint availability**, not just `navigator.onLine`. A build uses its configured backend; network status must not silently change that backend.
 - Offline PWA usage requires first successful online installation/provisioning and durable browser storage. Background tasks are not guaranteed after the browser closes. HTTPS (or localhost in development) is required for service worker and camera.
 
+## Shared API and hostname routing (agreed)
+
+- UI calls a **single FireSafety API contract**; only the transport selects LAN or Supabase. Keep business names, function arguments and semantics consistent between internal PostgreSQL and future Supabase functions.
+- For `localhost`, `127.0.0.1` or `::1`, `VITE_DEPLOY_TARGET=lan|internet` selects the backend for development. Restart Vite after changing `.env.local`.
+- For other hosts, a private IPv4 (`10/8`, `172.16/12`, `192.168/16`) or `dskorea.com` / `*.dskorea.com` uses LAN. All other hostnames (including Vercel) use Supabase. Hostname is a routing hint, **not authentication or proof that a service is private**; revisit the rule if a dskorea.com hostname serves the public app.
+- Backend choice is stable for that site load: failed LAN reachability means **offline and retain queued data**, never automatically upload to Supabase; vice versa.
+- Read mapping and write acknowledgments differ: the existing RSM gateway wraps PostgreSQL results (e.g. `success`, `rowCount`, `data`), while Supabase RPC exposes `data` and `error`. Normalize and validate them in the API layer, **never in individual UI screens**.
+- Do not expose RSM service credentials in React. The LAN path needs a trusted backend/proxy or securely authenticated user-specific gateway; Supabase requires authenticated RPC/RLS with employee authorization. Supabase Edge Functions are optional when RPC can do the job safely.
+- Locally stored identity metadata is separated by selected backend; business cache and outbox are separated by **both backend and employee**. Never send events to another account or backend. The earlier unscoped IndexedDB `FireSafety` is not automatically migrated because its event ownership/destination cannot be trusted.
+- **Implementation status:** `src/api-target.ts` and account-scoped Dexie switching are implemented and unit-tested on `local`/`internet`; live backend integration and real-device data isolation are still unverified.
+
 ## Backend and rollout sequence
 
 1. **Now: LAN first.** The React build for LAN talks to a **server-side LAN API**, which reads/writes the internal PostgreSQL database. Do not connect the browser to PostgreSQL directly.
