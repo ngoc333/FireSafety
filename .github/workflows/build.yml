@@ -1,8 +1,7 @@
 name: Frontend build
 on:
   push:
-    branches: [main, feat/offline-first-pwa]
-  pull_request:
+    branches: [local, internet]
 jobs:
   build:
     runs-on: ubuntu-latest
