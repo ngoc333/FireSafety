@@ -24,11 +24,13 @@ Goal: **simple, effective, no overengineering**.
 - **Do not invent integration details.** Never assume production URLs, table schemas, credentials, stored-procedure contracts, API endpoints, or Supabase mappings exist without verifying them. Clearly mark an unimplemented integration as such.
 - **Follow the agreed sequence.** Stabilize the LAN + internal PostgreSQL flow first. Work on Supabase/Vercel/C# cloud synchronization only when explicitly requested after the LAN flow is accepted.
 
-## Git workflow
+## Git workflow (solo developer)
 
-- `main` contains the agreed agent harness; do not merge application feature code into `main` without explicit permission.
-- Application PWA work is currently on `feat/offline-first-pwa`. Future LAN API changes should be developed on a dedicated feature branch.
-- Prefer small commits and reviewable pull requests. Never auto-merge a draft PR or force-push without permission.
+- Use exactly **two ongoing branches**: `local` for internal LAN + PostgreSQL; `internet` for Vercel + Supabase. `local` is the primary/default development branch.
+- **Commit changes directly** to the appropriate branch. Do not create extra feature branches or pull requests by default; this repository has one developer.
+- Make small, clear commits for completed changes. Modifying existing code is expected; avoid unrelated refactors or extra process.
+- Keep one React codebase in each branch. Share fixes between branches only when needed; do not blindly overwrite LAN-specific or Internet-specific configuration.
+- Check the current branch and changes before committing. Do not force-push or rewrite history without explicit instruction.
 
 ## Completion checklist
 

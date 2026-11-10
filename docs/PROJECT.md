@@ -51,10 +51,11 @@ Those names are **observed calls in the source**, not a verified specification o
 
 The initial PWA branch uses these *proposed* LAN routes: `POST /login`, `GET /health`, `GET /bootstrap`, `POST /events`. Treat these as frontend integration requirements to reconcile with the real server, **not endpoints already deployed**.
 
-## Current repository layout and status
+## Branches and current implementation
 
-- `main`: README and this two-file agent harness only.
-- `feat/offline-first-pwa`: initial React/TypeScript mobile UI, Dexie IndexedDB, auto-sync outbox, PWA, and Supabase/worker scaffolding. Draft PR #1 is not production approval.
+- `local` (**active, primary/default**): React + TypeScript mobile UI, IndexedDB (Dexie), auto-sync outbox, PWA. Build and stabilize the LAN API + internal PostgreSQL integration here.
+- `internet` (**later**): initially shares the same frontend foundation; use Supabase, Vercel and the C# bridge only after the LAN workflow is verified and the user requests Internet work.
+- **Workflow:** one developer, direct commits on `local` or `internet`. No permanent `main`, extra feature branches or PR flow is needed.
 - `src/`: React UI and client data/synchronization modules.
 - `supabase/`: future Internet-side schema/function scaffold.
 - `worker/`: future internal-to-cloud C# worker scaffold.
