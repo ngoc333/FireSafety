@@ -40,6 +40,22 @@ The metadata store is `FireSafety_identity_<target>`, and business data/outbox a
 
 **Do not ship internal credentials to browsers.** Vite environment variables are public by design. Never put PostgreSQL credentials, service role keys or shared RSM tokens here.
 
+## LAN adapter (work in progress)
+
+The branch-local Node 22 adapter at `server/lan-api.mjs` reuses existing Oracle Gateway and RSM Gateway **without exposing service credentials to React**. It is a LAN-only implementation scaffold, not a verified production integration.
+
+To try it with access to the internal gateways:
+
+```sh
+cp server/config.example.env .env.lan
+# Set the internal URLs and server-only credentials in .env.lan
+npm run dev:api
+# In another terminal (with .env.local using VITE_LAN_API_BASE=/api/fire-safety):
+npm run dev
+```
+
+Vite proxies API calls to the Node adapter. Use a single internal HTTPS origin for production, configure the trusted proxy, TLS and session secret. All secrets live in server environment variables. `GET /bootstrap` maps 5 existing RSM read functions into the shared React data model; the actual network responses still require validation. `POST /events` deliberately returns **501** until the real PostgreSQL functions support atomic event-UUID deduplication. This ensures pending offline writes are never falsely acknowledged. The history import is also not completed. See server source and `docs/PLAN.md`.
+
 ## LAN gateway contract
 
 The LAN API must enforce authenticated user authorization and CORS origin policy. The frontend expects:

@@ -3,7 +3,7 @@ import { resolveApiTarget } from './api-target';
 import type { BootstrapData, OutboxEvent, Profile } from './types';
 
 export const target = resolveApiTarget(window.location.hostname, import.meta.env.VITE_DEPLOY_TARGET);
-const lanUrl = (import.meta.env.VITE_LAN_API_BASE as string | undefined)?.replace(/\/$/,'') ?? '';
+const lanUrl = (import.meta.env.VITE_LAN_API_BASE as string | undefined)?.replace(/\/$/,'') || '/api/fire-safety';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 export const supabase: SupabaseClient | null =
@@ -53,7 +53,12 @@ export async function signIn(employeeId:string, password:string):Promise<Profile
 }
 
 export async function signOut():Promise<void> {
-  lanSession='';
+  if (target==='lan') {
+    try { await lanRequest<{success:boolean}>('/logout',{method:'POST'}); }
+    catch { /* offline sign-out still clears local account selection */ }
+    lanSession='';
+    return;
+  }
   if (supabase) await supabase.auth.signOut();
 }
 
