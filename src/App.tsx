@@ -202,9 +202,9 @@ export default function App() {
   if(!profile)return <div className="signin-wrap">
     <div className="signin-brand"><div className="brand-icon"><Flame size={35}/></div><h1>FireSafety</h1><p>Kiểm tra an toàn phòng cháy chữa cháy</p></div>
     <form className="signin-panel" onSubmit={login}>
-      <label>{target==='lan'?'Số thẻ nhân viên':'Email công ty'}</label>
-      <input autoFocus value={loginId} onChange={e=>setLoginId(e.target.value)} placeholder={target==='lan'?'Nhập số thẻ':'name@company.com'} autoComplete="username" />
-      {target==='internet'&&<><label>Mật khẩu</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password"/></>}
+      <label>{target==='lan'?'Tài khoản LAN':'Email công ty'}</label>
+      <input autoFocus value={loginId} onChange={e=>setLoginId(e.target.value)} placeholder={target==='lan'?'Nhập tài khoản':'name@company.com'} autoComplete="username" />
+      <label>Mật khẩu</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password"/>
       {error&&<p className="error">{error}</p>}
       <button className="btn primary" disabled={busy}>{busy?'Đang xác thực...':'Đăng nhập'} <ChevronRight size={18}/></button>
       <p className="helper">{sync.connection==='offline'?'Ngoại tuyến: chỉ tài khoản đã đăng nhập trước trên thiết bị này mới có thể tiếp tục.':'Dữ liệu kiểm tra lưu trên thiết bị và tự động đồng bộ.'}</p>

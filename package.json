@@ -7,8 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
-    "dev:api": "node --env-file=.env.lan server/lan-api.mjs"
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.0",

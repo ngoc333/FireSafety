@@ -27,12 +27,12 @@ npm run build
 
 ### API routing
 
-- `localhost`, `127.0.0.1`, `::1`: choose `VITE_DEPLOY_TARGET=lan` or `internet` in `.env.local`, then restart Vite.
+- `localhost`, `127.0.0.1`, `::1`: LAN API.
 - `*.dskorea.com` and private IPv4 addresses (`10/8`, `172.16/12`, `192.168/16`): LAN API.
 - Other hostnames (including `*.vercel.app`): Supabase.
 - Routing is selected **once by the website hostname**; an unreachable configured backend means offline. **Never silently fail over to the other backend.** Hostnames are not a security boundary.
 
-For LAN, configure `VITE_LAN_API_BASE`. For Supabase, set `VITE_SUPABASE_URL` and the public `VITE_SUPABASE_ANON_KEY` and deploy the required backend components before attempting integration. Internet/Supabase remains a scaffold, not yet an accepted release.
+For LAN, the browser calls the fixed RSM API `https://172.30.10.124:5179` directly. The API must allow the PWA origin through CORS and its HTTPS certificate must be trusted by the device. For Supabase, set `VITE_SUPABASE_URL` and the public `VITE_SUPABASE_ANON_KEY`. Internet/Supabase remains a scaffold, not yet an accepted release.
 
 ### IndexedDB scoping
 
@@ -40,32 +40,13 @@ The metadata store is `FireSafety_identity_<target>`, and business data/outbox a
 
 **Do not ship internal credentials to browsers.** Vite environment variables are public by design. Never put PostgreSQL credentials, service role keys or shared RSM tokens here.
 
-## LAN adapter (work in progress)
+## Direct LAN API
 
-The branch-local Node 22 adapter at `server/lan-api.mjs` reuses existing Oracle Gateway and RSM Gateway **without exposing service credentials to React**. It is a LAN-only implementation scaffold, not a verified production integration.
+The browser logs in directly with `POST https://172.30.10.124:5179/api/Auth/login` using `{ empId, password }`, then calls `/api/Db/call` with the Bearer token. The request envelope follows the Android app: `{ name, schema: "rsm", database: null, kind: "function", params }`.
 
-To try it with access to the internal gateways:
+The LAN login password is entered by the user and is not stored in IndexedDB or a `VITE_*` variable. The access token is kept only in the current browser session. The API must provide CORS and a certificate trusted by the device.
 
-```sh
-cp server/config.example.env .env.lan
-# Set the internal URLs and server-only credentials in .env.lan
-npm run dev:api
-# In another terminal (with .env.local using VITE_LAN_API_BASE=/api/fire-safety):
-npm run dev
-```
-
-Vite proxies API calls to the Node adapter. Use a single internal HTTPS origin for production, configure the trusted proxy, TLS and session secret. All secrets live in server environment variables. `GET /bootstrap` calls the single PostgreSQL master function `rsm.dz_web_get_master` for checklist items, codes, countermeasures, equipment, locations and the server-controlled schedule window. Master cursors use `update_date`; schedules are replaced as one ±7-day cache. Open repairs still use the existing read function. The migration in `server/sql/001_dz_web_master_sync.sql` has been applied and verified directly on RSM PostgreSQL; RSM Gateway/LAN response verification remains open. `POST /events` deliberately returns **501** until the real PostgreSQL functions support atomic event-UUID deduplication. This ensures pending offline writes are never falsely acknowledged. The history import is also not completed. See server source and `docs/PLAN.md`.
-
-## LAN gateway contract
-
-The LAN API must enforce authenticated user authorization and CORS origin policy. The frontend expects:
-
-- `POST /login` body `{employeeId}`, returns `{profile,accessToken?}`. LAN deployment must be restricted to trusted access or use stronger user authentication if exposed beyond LAN.
-- `GET /health` returns HTTP 200 (CORS enabled, allow preflight when applicable).
-- `GET /bootstrap?employeeId=...` returns `BootstrapData` in `src/types.ts`; optional master cursor query parameters are `checklist_item`, `code`, `countermeasure_item`, `equipment` and `location`. The server derives/validates the authorized employee identity; ignore spoofed employeeId.
-- `POST /events` receives an `OutboxEvent`, returns `{success:true}` only **after** a durable, idempotent database commit keyed by event UUID.
-
-The existing Android app uses PostgreSQL functions `fn_dz_scan_get_master_checklists`, `fn_dz_scan_get_locations`, `fn_dz_scan_get_master_countermeasures`, `fn_dz_scan_get_schedule`, `fn_dz_scan_get_results`, `fn_dz_scan_get_open_repairs`, `fn_dz_scan_save_inspection` and image-based repair functions. The LAN gateway must adapt these functions; this repository does not claim those server endpoints already exist.
+The direct LAN client uses `dz_web_get_master` for six master types, `fn_dz_scan_get_open_repairs` for open repairs and `fn_dz_scan_save_inspection` for checklist writes. Photo-free repair completion is intentionally not sent because the source API contract has not confirmed a corresponding function.
 
 ## Offline and sync guarantees
 

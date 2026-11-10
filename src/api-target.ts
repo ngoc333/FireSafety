@@ -9,10 +9,10 @@ function privateIPv4(host: string): boolean {
   return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 }
 
-export function resolveApiTarget(hostname: string, developmentTarget?: string): ApiTarget {
+export function resolveApiTarget(hostname: string): ApiTarget {
   const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
   if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-    return developmentTarget === 'internet' ? 'internet' : 'lan';
+    return 'lan';
   }
   if (host === 'dskorea.com' || host.endsWith('.dskorea.com') || privateIPv4(host)) {
     return 'lan';
